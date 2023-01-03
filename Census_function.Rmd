@@ -1,0 +1,186 @@
+---
+title: "get_census_data"
+output: pdf_document
+---
+
+The Census Bureau has built an API infrastructure for developers that allow for semi-automatic access to their [data products](https://www.census.gov/data/developers/data-sets.html). Each product is organized by a certain geographic area and a reference year. Furthermore, each product can have a sub-product with multiple data tables. 
+In this exercise we are interested in building a function that will pull data from the Census Bureau API's in a semi-automatic manner following the [Census Data API User Guide](https://www.census.gov/data/developers/guidance/api-user-guide.html). 
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+## Load packages
+
+library(httr)
+library(jsonlite)
+library(janitor)
+library(tidyverse)
+```
+
+### Example 
+
+Data from Puerto Rico is identified by the code 72 in the geography level. In the following example we go through a process of pulling data for a specific product. In particular, we pull data from the 2021 ACS 1-year subject table for a set of population estimates variables. 
+
+```{r}
+#### Pulling Puerto Rico Census Data from APIs ####
+
+## We need a Census Key that allows for access. This key is associated to the 
+## author's information.
+source("census_key.R")
+
+## 1. Identify the dataset we want to use 
+## This link has all of the datasets available https://api.census.gov/data.html
+
+## For example, let's look at the latest 1-year ACS subject tables
+### Here we have a product (acs), a sub-product (acs1), and a data table (subject).
+
+url_base <- "http://api.census.gov/data/2021/acs/acs1/subject"
+
+### 2. Identify which variables we want, and the geography granularity
+
+# https://api.census.gov/data/2021/acs/acs1/subject/geography.html
+geography_level <- "060" ### state and counties 
+
+# https://api.census.gov/data/2021/acs/acs1/subject/variables.html
+variables <- paste0(c("NAME", "COUNTY", sprintf("S0101_C01_%03dE", 1:20)), collapse=",")
+
+## In this case the year is 2021. 
+
+url <- paste0("https://api.census.gov/data/2021/acs/acs1/subject?get=",
+              variables, "&for=county:*&in=state:72&key=", census_key)
+
+data_census <- GET(url)
+
+data_census <- fromJSON(rawToChar(data_census$content)) %>% row_to_names(1)
+
+head(data_census)
+```
+
+As can be seen, we obtain a dataset of estimates, but it is difficult to identify which variables were pulled. The Census website organizes the [variables available](https://api.census.gov/data/2021/acs/acs1/subject/variables.html) for each data set. Furthermore, observe that the variables begin with `S0101`. It is also an option to call a group of variables; however, these groups are already built by the Census Bureau. To specify the variables, we can call the description for each of the variables and do some wrangling to obtain a well-documented dataset. 
+
+```{r}
+variables_url <- "https://api.census.gov/data/2021/acs/acs1/subject/variables"
+variables_information <- GET(variables_url)
+variables_information <- fromJSON(rawToChar(variables_information$content)) %>% 
+    row_to_names(1) %>%
+    as.data.frame() %>%
+    filter(name %in% colnames(data_census))
+
+variables_information
+```
+
+### Building a simple function
+
+We now generalize the previous example for the ACS (acs) and the Population Estimates (pep) products. 
+```{r}
+### Now let's work on generalizing
+
+get_census_data <- function(product, subproduct, year , variables, group = F, 
+                            table_type = NULL, census_key) {
+  ## product <- acs1 ; acs3, acs5,  
+   ### product details here: https://api.census.gov/data.html
+     ## acs1 only provides estimates for counties where population >= 65,000
+  ## acs5 https://www.census.gov/data/developers/data-sets/acs-5year.html
+  library(httr)
+  library(jsonlite)
+  library(janitor)
+  library(tidyverse)
+  if (group){
+  url_base <- ifelse(is.null(table_type), paste0("http://api.census.gov/data/",
+                                                 year, "/", product, "/", subproduct), 
+                     paste0("http://api.census.gov/data/",year, "/", product, "/", 
+                            subproduct, "/", table_type))
+  url <- ifelse(product == "pep", paste0(url_base, "?get=",variables,"&for=state:72&key=", 
+                                         census_key),
+                paste0(url_base, "?get=group(",variables,")&for=county:*&in=state:72&key=", 
+                       census_key))
+  } else {
+  variables <- ifelse(product=="pep", paste0(c("NAME"  ,paste(variables)), collapse=","),
+                      paste0(c("NAME", "COUNTY" ,paste(variables)), collapse=","))
+  url_base <- ifelse(is.null(table_type), paste0("http://api.census.gov/data/",
+                                                 year,"/", product, "/", subproduct), 
+                     paste0("http://api.census.gov/data/",year, "/", product, "/",
+                            subproduct, "/", table_type))
+  url <- ifelse(product == "pep", paste0(url_base, "?get=",variables,"&for=state:72&key=", 
+                                         census_key),
+                paste0(url_base, "?get=",variables,"&for=county:*&in=state:72&key=", 
+                       census_key))
+  }
+ 
+  data_census <- GET(url)
+  data_census <- fromJSON(rawToChar(data_census$content), flatten=T) %>% 
+    as.data.frame() %>%
+    row_to_names(1)
+  
+  variables_url <- paste0(url_base, "/variables")
+  variables_information <- GET(variables_url)
+  variables_information <- fromJSON(rawToChar(variables_information$content)) %>% 
+    row_to_names(1) %>%
+    as.data.frame() %>%
+    filter(name %in% colnames(data_census))
+  lista_censo <- list(data_census, variables_information)
+  return(lista_censo) ### returns a list with two datasets -> variables information and data 
+}
+
+```
+
+#### Does it work? 
+
+Let us try the function to obtain data from ACS 5-year for 2021 and the group of variables denoted by `B01001`. We obtain data estimates for each municipality. Observe that the variables have a suffix `E, M`, etc., which denotes the type of measure. Those ending with `E` are the estimates. The rest of the variables can be used to assess the quality of the estimate. More details [here](https://www.census.gov/data/developers/data-sets/acs-1year/notes-on-acs-estimate-and-annotation-values.html).   
+
+```{r}
+
+acs_municipality <- get_census_data(product = "acs", 
+                                    subproduct = "acs5",
+                                    year = "2021", 
+                                    variables =  "B01001_001E",
+                                    group = F, 
+                                    table_type = NULL, 
+                                    census_key = census_key)
+
+head(acs_municipality[[1]])
+```
+
+Now we obtain population estimates by single year of age for 2019. 
+
+
+```{r}
+
+pop_est_SYA <- get_census_data(product = "pep", 
+                                subproduct = "charage",
+                                year = "2019", 
+                                variables = c("AGE","POP"), 
+                                group = F, 
+                                table_type = NULL, 
+                                census_key = census_key)
+
+head(pop_est_SYA[[1]])
+```
+
+
+## Challenges and possible solutions
+
+The most significant challenge is that products that are of main interest in our research might not necessarily be available through the API structure that the Census Bureau has built. For example, the population estimates for single year of age are available up to 2019 and the municipality population estimates are only available through the 5 year ACS. As specified in the Census website, the 1 and 3 year ACS are available for counties for which the population is 65,000 or higher, which is not the case for most PR municipalities. Furthermore, selecting variables is a difficult task due to the massive amount of variables available. There are many possible api calls one can create, and given the challenges mentioned, we explore the `tidycensus` package and see how we can modify their functions to accommodate for the data of interest. 
+
+
+### Tidycensus exploration
+
+We try to obtain the same data we obtained with the function we wrote. 
+
+```{r}
+library(tidycensus)
+
+census_api_key(census_key)
+
+### ACS 5 year
+
+head(get_acs(geography = "county", variables = "B01001_001E", year = 2021, state = "puerto rico"))
+```
+
+For the population estimates we could not find the single year estimates. This is because the tidyverse function does not accommodate for the granularity we are seeking. We would need to modify this function to obtain the estimates we want. In the following example note that the age groups are denoted by integer numbers not to be confused with single year of age. 
+
+```{r}
+### Population estimates 
+get_estimates(geography = "county", product = "characteristics", breakdown = c("AGEGROUP"), 
+                  year = 2019, state = "puerto rico", output = "tidy")
+
+```
