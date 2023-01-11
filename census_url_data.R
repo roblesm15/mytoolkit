@@ -49,5 +49,120 @@ popest_muni_tidy <- read.csv(popest_muni_url,
   select(municipio, start, end, gender, poblacion, year) 
 
 
-sum(popest_muni_tidy[popest_muni_tidy$year == "2021", ]$poblacion)
-sum(popest_sya_tidy[popest_sya_tidy$year=="2021", ]$estimate)
+sum(popest_muni_tidy[popest_muni_tidy$year == "2020", ]$poblacion)
+sum(popest_sya_tidy[popest_sya_tidy$year=="2020", ]$estimate)
+
+
+### previous years 2015 - 2019 
+
+source("Census_function.R")
+source("census_key.R")
+
+
+pop_est_sya_2015_2019 <- map_df(c(2015:2019), function(y){
+  tmp <- get_census_data(product = "pep", 
+                         subproduct = "charage",
+                         year = y, 
+                         variables = c("AGE", "SEX", "POP"), 
+                         group = F, 
+                         table_type = NULL, 
+                         census_key = census_key)
+  tmp <- tmp[[1]]
+  tmp$year <- as.character(y)
+  return(tmp)
+})
+
+
+### By municipios 
+
+
+pop_est_muni_2015_2019 <- map_df(c(2015:2019), function(y){
+  tmp <- get_census_data(product = "pep", 
+                         subproduct = "charagegroups",
+                         year = y, 
+                         variables = c("AGEGROUP", "SEX", "GEONAME", "POP"), 
+                         municipio = T,
+                         group = F, 
+                         table_type = NULL, 
+                         census_key = census_key)
+  tmp <- tmp[[1]]
+  tmp$year <- as.character(y)
+  return(tmp)
+})
+
+### now we merge everything
+
+pop_est_sya <- pop_est_sya_2015_2019 %>%
+  select(AGE, SEX, POP, year) %>%
+  setNames(c("age", "gender", "estimate", "year")) %>%
+  filter(gender %in% c("1", "2"), !(age %in% c("999"))) %>%
+  mutate(gender = recode(gender, `1` = "M", `2` = "F")) %>%
+  mutate(age = as.numeric(age), 
+         estimate = as.numeric(estimate)) %>%
+  full_join(popest_sya_tidy, by = c("age", "gender", "estimate", "year"))
+
+pop_est_muni <- pop_est_muni_2015_2019 %>%
+  select(-state, -county) %>%
+  setNames(c("agegroup", "gender", "municipio", "poblacion", "year")) %>%
+  mutate(agegroup = as.numeric(agegroup)) %>%
+  filter(agegroup %in% c(1:18), gender %in% c("1", "2")) %>%
+  mutate(gender = recode(gender, `1` = "M", `2` = "F")) %>%
+  mutate(agegroup = case_when(agegroup == 1 ~ "0004", agegroup == 2 ~ "0509", 
+                              agegroup == 3 ~ "1014", agegroup == 4 ~ "1519", 
+                              agegroup == 5 ~ "2024", agegroup == 6 ~ "2529", 
+                              agegroup == 7 ~ "3034", agegroup == 8 ~ "3539", 
+                              agegroup == 9 ~ "4044", agegroup == 10 ~ "4549", 
+                              agegroup == 11 ~ "5054", agegroup == 12 ~ "5559", 
+                              agegroup == 13 ~ "6064", agegroup == 14 ~ "6569", 
+                              agegroup == 15 ~ "7074", agegroup == 16 ~ "7579", 
+                              agegroup == 17 ~ "8084", agegroup == 18 ~ "85Inf")) %>%
+  mutate(start = as.numeric(str_extract(agegroup, "\\d{2}")),
+         end = as.numeric(str_remove(agegroup, "\\d{2}"))) %>%
+  mutate(municipio = str_remove(municipio, " Municipio, Puerto Rico")) %>% 
+  select(-agegroup) %>% 
+  mutate(poblacion = as.numeric(poblacion)) %>%
+  full_join(popest_muni_tidy)
+
+## verify numbers
+
+sum_muni <- pop_est_muni %>% 
+  group_by(year) %>%
+  summarise(pop_muni = sum(poblacion))
+sum_sya <- pop_est_sya %>% 
+  group_by(year) %>%
+  summarise(pop_sya = sum(estimate))
+
+
+verification <- merge(sum_muni, sum_sya, by="year")
+
+### what's going on with 2018?
+
+prueba_2018 <- get_census_data(product = "pep", 
+                          subproduct = "charage",
+                          year = 2018, 
+                          variables = c("AGE", "SEX", "POP"), 
+                          group = F, 
+                          table_type = NULL, 
+                          census_key = census_key)
+
+prueba_2019 <- get_census_data(product = "pep", 
+                               subproduct = "charage",
+                               year = 2019, 
+                               variables = c("AGE", "SEX", "POP"), 
+                               group = F, 
+                               table_type = NULL, 
+                               census_key = census_key)
+
+prueba_2018 <- prueba_2018[[1]] %>% 
+  filter(!(AGE %in% c("999")), !(SEX %in% c("0"))) %>%
+  mutate(POP_2018=as.numeric(POP))
+    
+prueba_2019 <- prueba_2019[[1]] %>% 
+  filter(!(AGE %in% c("999")), !(SEX %in% c("0"))) %>%
+  mutate(POP_2019=as.numeric(POP))   
+
+pruebass <- merge(prueba_2018, prueba_2019, by = c("AGE", "SEX")) %>%
+  mutate(difference = POP_2018 - POP_2019)
+
+## biggest difference is in younger years. why?
+
