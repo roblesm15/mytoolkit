@@ -1,4 +1,6 @@
 # mytoolkit
 This repository is a compilation of useful functions in R to wrangle, manipulate, and download data. Certainly, there are packages that can perform similar jobs but specific functionalities might be missing.
 
-The first function I share downloads data for Puerto Rico from the Census APIs product. It is a work in progress but it allows the pulling of data that famous, and very well done packages like tidycensus, cannot do. 
+The set of functions I share downloads data for Puerto Rico from the Census APIs product and the United Nations APIs. It is a work in progress but it allows the pulling of data that famous, and very well done packages like tidycensus, cannot do. 
+
+The latest version of `Census_function.R` has three functions: `get_un_data`, `get_census_data` and `make_tidy_pop_estimates`. The first two pull data from the United Nations and the Census Bureau, respectively. The function `make_tidy_pop_estimates` produces a tidy data set on population estimates for Puerto Rico, effectively combining data from the Census Bureau and from the United Nations when asked. The reason I use United Nation population estimates is because some Census Bureau data estimates for Puerto Rico are not available online for years before 2000. The `sandbox.R` file provides a few sanity checks and a comparison for the United Nations data and the Census data for 2000 through 2021. 

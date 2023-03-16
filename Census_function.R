@@ -6,7 +6,40 @@
 ## acs5 https://www.census.gov/data/developers/data-sets/acs-5year.html
 
 
-
+get_un_data <- function(start_year, end_year){
+  library(httr)
+  library(jsonlite)
+  library(janitor)
+  library(tidyverse)
+  library(purrr)
+  
+  base_url_UNPD <- "https://population.un.org/dataportalapi/api/v1"
+  
+  puerto_rico_iso3 <- "PRI"
+  puerto_rico_iso2 <- "PR"
+  puerto_rico_id <- "630"
+  indicator_code <- "47"
+  start_year <- start_year
+  end_year <- end_year
+  
+  target <- paste0(base_url_UNPD, "/data/indicators/", indicator_code, 
+                   "/locations/", puerto_rico_id, "/start/", start_year, "/end/", end_year)
+  
+  #call the API 
+  response <- fromJSON(target)
+  
+  #get the table with data available in the first page
+  df_UNPD <- response$data
+  
+  #until there are next pages available
+  while (!is.null(response$nextPage)){
+    #call the API for the next page
+    response <- fromJSON(response$nextPage)
+    #add the data of the new page to the data.frame with the data of the precious pages
+    df_UNPD <- rbind(df_UNPD, response$data)
+  }
+  return(df_UNPD)
+}
 
 get_census_data <- function(product, subproduct, year, variables, municipio = F, group = F, 
                             table_type = NULL, census_key) {
@@ -140,11 +173,12 @@ get_census_data <- function(product, subproduct, year, variables, municipio = F,
 ################################################################################
 
 
-make_tidy_census <- function( year, municipio = F, 
-                              group = F, table_type = NULL, census_key) {
+make_tidy_pop_estimates <- function(year, municipio = F, 
+                             group = F, table_type = NULL, census_key) {
+  
   library(openxlsx)
   library(purrr)
-
+  
   if (municipio) {
     variables = c("AGEGROUP", "SEX", "GEONAME", "POP")
     subproduct = "charagegroups"
@@ -153,9 +187,22 @@ make_tidy_census <- function( year, municipio = F,
     subproduct = "charage"
   }
   
-  year = c(2000:2021)
   
-  if (any(year <= 2014)) {
+  if(any(year<2000)){
+    years <- year[year<2000]
+    start_year <- min(years)
+    end_year <- max(years)
+    
+    temp_un <- get_un_data(start_year, end_year) %>%
+      filter( sex != "Both sexes") %>%
+      mutate(year = as.numeric(timeLabel)) %>%
+      mutate(age = as.numeric(ageStart)) %>%
+      mutate(sex = recode(sex, `Female`="F", `Male`="M")) %>%
+      select(age, sex, value, year) %>%
+      setNames(c("age","gender","estimate","year"))
+  } else {temp_un <- NULL}
+  
+  if  (any(year <= 2014)) {
     year_api <- year[year<=2014]
     temp_x <- map_df(year_api, function(y) {
       tmp <- get_census_data(
@@ -173,7 +220,7 @@ make_tidy_census <- function( year, municipio = F,
     })
   } 
   
-  if (any(year < 2020)) {
+  if (any(year < 2020) & any(year > 2014)) {
     year_api <- year[!(year %in% c(2020, 2021)) & year > 2014]
     temp <- map_df(year_api, function(y) {
       tmp <- get_census_data(
@@ -397,7 +444,8 @@ make_tidy_census <- function( year, municipio = F,
       select(-agegroup) %>% 
       mutate(poblacion = as.numeric(poblacion))
   } else if (!any(year %in% c(2020, 2021)) &
-             municipio==FALSE){
+             municipio==FALSE &
+             any(year>=2000)){
     out <- temp %>%
       select(AGE, SEX, POP, year) %>%
       setNames(c("age", "gender", "estimate", "year")) %>%
@@ -406,11 +454,13 @@ make_tidy_census <- function( year, municipio = F,
       mutate(age = as.numeric(age),
              estimate = as.numeric(estimate))
     
-  }
+  } else {out <- NULL}
   
-  out <- rbind(temp_x,out)
+  out <- rbind(temp_un,temp_x, out)
   return(out)
 }
+
+
 
 
 
