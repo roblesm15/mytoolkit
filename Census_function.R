@@ -41,6 +41,8 @@ get_un_data <- function(start_year, end_year){
   return(df_UNPD)
 }
 
+
+
 get_census_data <- function(product, subproduct, year, variables, municipio = F, group = F, 
                             table_type = NULL, census_key) {
   library(httr)
@@ -173,8 +175,8 @@ get_census_data <- function(product, subproduct, year, variables, municipio = F,
 ################################################################################
 
 
-make_tidy_pop_estimates <- function(year, municipio = F, 
-                             group = F, table_type = NULL, census_key) {
+make_tidy_pop_estimates <- function(year, municipio = FALSE, 
+                             group = FALSE, un_data = FALSE, table_type = NULL, census_key) {
   
   library(openxlsx)
   library(purrr)
@@ -187,6 +189,18 @@ make_tidy_pop_estimates <- function(year, municipio = F,
     subproduct = "charage"
   }
   
+  if (un_data) {
+    start_year <- min(year)
+    end_year <- max(year)
+    temp_un <- get_un_data(start_year, end_year) %>%
+      filter(sex != "Both sexes", variant == "Median") %>%
+      mutate(year = as.numeric(timeLabel)) %>%
+      mutate(age = as.numeric(ageStart)) %>%
+      mutate(sex = recode(sex, `Female`="F", `Male`="M")) %>%
+      select(age, sex, value, year) %>%
+      setNames(c("age","gender","estimate","year"))
+    out <- temp_un
+  } else {
   
   if(any(year<2000)){
     years <- year[year<2000]
@@ -194,7 +208,7 @@ make_tidy_pop_estimates <- function(year, municipio = F,
     end_year <- max(years)
     
     temp_un <- get_un_data(start_year, end_year) %>%
-      filter( sex != "Both sexes") %>%
+      filter( sex != "Both sexes", variant == "Median") %>%
       mutate(year = as.numeric(timeLabel)) %>%
       mutate(age = as.numeric(ageStart)) %>%
       mutate(sex = recode(sex, `Female`="F", `Male`="M")) %>%
@@ -457,6 +471,8 @@ make_tidy_pop_estimates <- function(year, municipio = F,
   } else {out <- NULL}
   
   out <- rbind(temp_un,temp_x, out)
+ 
+   }
   return(out)
 }
 

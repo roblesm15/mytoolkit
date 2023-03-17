@@ -105,5 +105,40 @@ ggplot(comparison, aes(x=year, y = difference_un_cb)) +
 
 
 
+### only UN ###
+
+un_data <- make_tidy_pop_estimates(year = c(2000:2021), 
+                        municipio = FALSE,
+                        group = FALSE, 
+                        un_data = TRUE,
+                        table_type = NULL, 
+                        census_key = census_key)
+
+census_data <- make_tidy_pop_estimates(year = c(2000:2021), 
+                                        municipio = FALSE,
+                                        group = FALSE, 
+                                        un_data = FALSE,
+                                        table_type = NULL, 
+                                        census_key = census_key)
 
 
+un_data_sum <- un_data %>%
+  group_by(year) %>%
+  summarise(estimate = sum(estimate))
+census_data_sum <- census_data %>%
+  group_by(year) %>%
+  summarise(estimate = sum(estimate))
+
+comparison_2 <- merge(un_data_sum, census_data_sum, by = "year") %>%
+  mutate(difference = estimate.x - estimate.y)
+
+
+### projections ###
+
+un_data_projections <- make_tidy_pop_estimates(year = c(2024:2030), 
+                                   municipio = FALSE,
+                                   group = FALSE, 
+                                   un_data = TRUE,
+                                   table_type = NULL, 
+                                   census_key = census_key)
+  
