@@ -1,0 +1,52 @@
+Data on pop estimates for single year of age
+
+Helper function for early years 
+
+   wrangle_prcagesex <- function(data, b4_2010 = T) {
+  if (b4_2010) {
+    year_base <- 1998
+  } else { 
+    year_base <- 2007}
+  data_census <- fromJSON(rawToChar(data$content), flatten=T) 
+  data_census <- data.table::data.table(data_census)
+  data.table::setnames(data_census, as.character(unlist(data_census[1,])))
+  data_census <- data_census[-1,]
+  data_census <- data_census[!(AGE == 999 | DATE_ %in% c("1", "2") | SEX == 0)]
+  data_census[, date := as.numeric(DATE_)]
+  data_census[, year := date + year_base] 
+  data_census <- data_census[, .(age = AGE, gender = SEX, estimate = POP, year)]
+  data_census[, gender := ifelse(gender == 1, "M", ifelse(gender == 2, "F", gender))]
+  data_census <- data_census[year %in% year_new]
+  data_census[, c("age", "estimate") := lapply(.SD, as.numeric), .SDcols = c("age", "estimate")]
+  return(data_census)
+}
+
+--------------------
+
+- 2000 - 2009 "GET(paste0("http://api.census.gov/data/2000/pep/int_charage?get=POP,SEX,AGE,DATE_&for=state:72&key=", census_key))"
+
+      
+
+      
+      
+- 2010 - 2014 "GET(paste0("https://api.census.gov/data/2014/pep/prcagesex?get=POP,SEX,STNAME,AGE,DATE_&for=state:72&key=", census_key))""
+      
+      data_census_y <- fromJSON(rawToChar(y$content), flatten=T) 
+      data_census_y <- data.table::data.table(data_census_y)
+      data.table::setnames(data_census_y, as.character(unlist(data_census_y[1,])))
+      data_census_y <- data_census_y[-1,]
+      data_census_y <- data_census_y[!(AGE == 999 | DATE_ %in% c("1", "2") | SEX == 0)]
+      data_census_y[, date := as.numeric(DATE_)]
+      data_census_y[, year := as.numeric(year) + 2007]
+      data_census_y <- data_census_y[, .(age = AGE, gender = SEX, estimate = POP, year)]
+      data_census_y[, gender := ifelse(gender == 1, "M", ifelse(gender == 2, "F", gender))]
+      data_census_y <- data_census_y[year %in% year_new]
+      data_census_y[, c("age", "estimate") := lapply(.SD, as.numeric), .SDcols = c("age", "estimate")]
+      
+- 2018 url <- paste0("https://api.census.gov/data/2018/pep/charage?get=AGE,SEX,POP&DATE_CODE=11&for=state:72&key=",
+                    census_key)
+      data_census <- GET(url)
+      data_census <- fromJSON(rawToChar(data_census$content), flatten=T) 
+      data_census <- data.table::data.table(data_census)
+      data.table::setnames(data_census, as.character(unlist(data_census[1,])))
+      data_census <- data_census[-1,]

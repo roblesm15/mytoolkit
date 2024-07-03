@@ -176,10 +176,13 @@ get_census_data <- function(product, subproduct, year, variables, municipio = F,
 
 
 make_tidy_pop_estimates <- function(year, municipio = FALSE, 
-                             group = FALSE, un_data = FALSE, table_type = NULL, census_key) {
+                            un_data = FALSE, census_key) {
   
   library(openxlsx)
   library(purrr)
+  
+  group = FALSE 
+  table_type = NULL
   
   if (municipio) {
     variables = c("AGEGROUP", "SEX", "GEONAME", "POP")
@@ -216,7 +219,7 @@ make_tidy_pop_estimates <- function(year, municipio = FALSE,
       setNames(c("age","gender","estimate","year"))
   } else {temp_un <- NULL}
   
-  if  (any(year <= 2014)) {
+  if  (any(year <= 2014) & municipio==FALSE) {
     year_api <- year[year<=2014]
     temp_x <- map_df(year_api, function(y) {
       tmp <- get_census_data(
@@ -232,9 +235,9 @@ make_tidy_pop_estimates <- function(year, municipio = FALSE,
       tmp <- tmp[[1]]
       return(tmp)
     })
-  } 
+  } else {temp_x <- NULL} 
   
-  if (any(year < 2020) & any(year > 2014)) {
+  if (any(year> 2014 & year < 2020) ) {
     year_api <- year[!(year %in% c(2020, 2021)) & year > 2014]
     temp <- map_df(year_api, function(y) {
       tmp <- get_census_data(

@@ -1,0 +1,139 @@
+Data for municipios is not available before 2000
+
+- 2000 - 2010  "https://www2.census.gov/programs-surveys/popest/datasets/2000-2010/intercensal/puerto-rico/prm-est00int-agesex-5yr.csv"
+      
+      year_temp_2000 <- year[year<=2010]
+      
+      temp_2000_url <- "https://www2.census.gov/programs-surveys/popest/datasets/2000-2010/intercensal/puerto-rico/prm-est00int-agesex-5yr.csv"
+      
+      temp_2000 <- data.table::fread(temp_2000_url, encoding = "Latin-1")
+      temp_2000 <- temp_2000[,-c("SUMLEV", "MUNICIPIO", "ESTIMATESBASE2000", "CENSUS2010POP")]
+      data.table::setnames(temp_2000, c("municipio", "gender", "agegroup", names(temp_2000)[-c(1:3)]))
+      temp_2000 <- melt(temp_2000, id.vars = c("municipio", "gender", "agegroup"),
+                        variable.name = "year", value.name = "poblacion", verbose = FALSE)
+      
+      temp_2000[, agegroup := as.character(agegroup)]
+      temp_2000 <- temp_2000[agegroup!="0"]
+      temp_2000[, agegroup := fcase(
+        agegroup == "1", "0004",
+        agegroup == "2", "0509",
+        agegroup == "3", "1014",
+        agegroup == "4", "1519",
+        agegroup == "5", "2024",
+        agegroup == "6", "2529",
+        agegroup == "7", "3034",
+        agegroup == "8", "3539",
+        agegroup == "9", "4044",
+        agegroup == "10", "4549",
+        agegroup == "11", "5054",
+        agegroup == "12", "5559",
+        agegroup == "13", "6064",
+        agegroup == "14", "6569",
+        agegroup == "15", "7074",
+        agegroup == "16", "7579",
+        agegroup == "17", "8084",
+        agegroup == "18", "85Inf",
+        TRUE, NA_character_
+      )]
+      temp_2000[,  `:=` (year=as.numeric(gsub("POPESTIMATE", "", year)), 
+                         municipio = gsub(" Municipio", "", municipio), 
+                         gender = fifelse(gender==1, "M", "F"), 
+                         start = as.numeric(substr(agegroup, 1, 2)), 
+                         end = as.numeric(sub("\\d{2}", "", agegroup)))]
+      temp_2000 <- temp_2000[,-"agegroup"][year %in% year_temp_2000]
+
+
+- 2011 - 2019  "https://www2.census.gov/programs-surveys/popest/datasets/2010-2020/municipios/asrh/PRM-EST2020-AGESEX.csv"
+        
+        year_temp_2010 <- year[year>2010 & year < 2020]
+        
+        temp_2010_url <- "https://www2.census.gov/programs-surveys/popest/datasets/2010-2020/municipios/asrh/PRM-EST2020-AGESEX.csv"
+        ## https://www2.census.gov/programs-surveys/popest/technical-documentation/file-layouts/2010-2020/prm-est2020-agesex.pdf##
+        temp_2010 <- data.table::fread(temp_2010_url, encoding = "Latin-1")
+        temp_2010 <- temp_2010[, -c("SUMLEV", "MUNICIPIO")]
+        # Select relevant columns and rename them
+        
+        data.table::setnames(temp_2010, c("municipio", "year", names(temp_2010)[-c(1:2)]))
+        temp_2010 <- temp_2010[!(year %in% c(1,2,3,13,14))]
+        temp_2010[, year := as.numeric(year) + 2007]
+        
+        temp_2010 <- melt(temp_2010, id.vars = c("municipio", "year"), 
+                        variable.name = "name", value.name = "poblacion", verbose = FALSE)
+        temp_2010[, municipio := gsub(" Municipio", "", municipio)]
+         
+        # Split name column into age and gender columns
+        temp_2010 <- temp_2010[stringr::str_starts(name, "AGE")]
+        temp_2010 <- temp_2010[, c("age", "gender") := data.table::tstrsplit(name, "_")]
+        temp_2010[, age := gsub("AGE", "", age)]
+        # Recode age values
+        temp_2010[, age := ifelse(age == "04", "0004",
+                                         ifelse(age == "59", "0509",
+                                                ifelse(age == "513", "0513",
+                                                       ifelse(age == "85PLUS", "85Inf", age))))
+        ]
+        
+        temp_2010 <- temp_2010[!(age %in% c("16PLUS", "18PLUS", "65PLUS"))]
+        temp_2010 <- temp_2010[!(gender %in% c("TOT"))]
+        
+        # Recode gender values
+        temp_2010[gender == "MALE", gender := "M"]
+        temp_2010[gender == "FEM", gender := "F"]
+        
+        # Pivot longer to rearrange columns
+        temp_2010[, start := as.numeric(substr(age, 1, 2))]
+        temp_2010[, end := as.numeric(sub("\\d{2}", "", age))]
+        temp_2010[, dif := end - start]
+        temp_2010 <- temp_2010[dif %in% c(4, Inf)]
+        temp_2010 <- temp_2010[,-c("name", "age", "dif")]
+        temp_2010 <- temp_2010[year %in% year_temp_2010]
+
+
+- 2020 - 2022  "https://www2.census.gov/programs-surveys/popest/datasets/2020-2022/counties/asrh/cc-est2022-agesex-72.csv"
+
+      year_pop_est <- year[year>=2020]
+      
+      popest_muni_url <- "https://www2.census.gov/programs-surveys/popest/datasets/2020-2022/counties/asrh/cc-est2022-agesex-72.csv"
+      
+      ## Information about dataset ##
+      ### https://www2.census.gov/programs-surveys/popest/technical-documentation/file-layouts/2020-2022/cc-est2022-agesex.pdf##
+      
+      popest_muni_tidy <- data.table::fread(popest_muni_url, encoding = "Latin-1")
+      popest_muni_tidy <- popest_muni_tidy[, -c("SUMLEV", "MUNICIPIO")]
+      # Select relevant columns and rename them
+      
+      data.table::setnames(popest_muni_tidy, c("municipio", "year", names(popest_muni_tidy)[-c(1:2)]))
+      popest_muni_tidy <- popest_muni_tidy[year != 1]
+      popest_muni_tidy[, year := ifelse(year == 2, "2020", ifelse(year == 3, "2021", ifelse(year == 4, "2022", year)))]
+      popest_muni_tidy[, municipio := gsub(" Municipio", "", municipio)]
+      
+      # Pivot longer to gather age and gender columns
+      popest_muni_tidy <- data.table::melt(popest_muni_tidy, id.vars = c("municipio", "year"),
+                                           variable.name = "name", value.name = "poblacion", verbose = FALSE)
+      
+      # Split name column into age and gender columns
+      popest_muni_tidy <- popest_muni_tidy[ str_starts(name, "AGE")]
+      popest_muni_tidy <- popest_muni_tidy[, c("age", "gender") := data.table::tstrsplit(name, "_")]
+      popest_muni_tidy[, age := gsub("AGE", "", age)]
+      # Recode age values
+      popest_muni_tidy[, age := ifelse(age == "04", "0004",
+                                       ifelse(age == "59", "0509",
+                                              ifelse(age == "513", "0513",
+                                                     ifelse(age == "85PLUS", "85Inf", age))))
+      ]
+      
+      popest_muni_tidy <- popest_muni_tidy[!(age %in% c("16PLUS", "18PLUS", "65PLUS"))]
+      popest_muni_tidy <- popest_muni_tidy[!(gender %in% c("TOT"))]
+      
+      # Recode gender values
+      popest_muni_tidy[gender == "MALE", gender := "M"]
+      popest_muni_tidy[gender == "FEM", gender := "F"]
+      
+      # Pivot longer to rearrange columns
+      popest_muni_tidy[, start := as.numeric(substr(age, 1, 2))]
+      popest_muni_tidy[, end := as.numeric(sub("\\d{2}", "", age))]
+      popest_muni_tidy[, dif := end - start]
+      popest_muni_tidy <- popest_muni_tidy[dif %in% c(4, Inf)]
+      popest_muni_tidy <- popest_muni_tidy[,-c("name", "age", "dif")]
+      popest_muni_tidy <- popest_muni_tidy[year %in% year_pop_est]
+      rm(year_pop_est)
+      

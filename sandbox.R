@@ -29,11 +29,13 @@ source("census_key.R")
 #### SANITY CHECK -- comparison to excessmort
 
 
-test_3 <- make_tidy_pop_estimates(year = c(2000:2021), 
-                           municipio = F,
-                           group = F, 
-                           table_type = NULL, 
+test_3 <- make_tidy_pop_estimates(year = c(2002,2015,2020:2021), 
+                           municipio = T, 
                            census_key = census_key)
+
+test_3_new <- make_tidy_pop_estimates(year = c(2015,2020:2021), 
+                                     municipio = T,
+                                     census_key = census_key)
 
 prueba <- test_3 %>%
  group_by(year) %>%
@@ -81,10 +83,8 @@ un_20_21 <- df_UNPD %>%
   summarise(estimate_un=sum(estimate_un)) %>%
   ungroup()
 
-census <- make_tidy_pop_estimates(year = c(2000:2021), 
+census_OG <- make_tidy_pop_estimates(year = c(2019, 2020), 
                                  municipio = F,
-                                 group = F, 
-                                 table_type = NULL, 
                                  census_key = census_key)
 
 census_20_21 <- census %>%
@@ -114,11 +114,9 @@ un_data <- make_tidy_pop_estimates(year = c(2000:2021),
                         table_type = NULL, 
                         census_key = census_key)
 
-census_data <- make_tidy_pop_estimates(year = c(2000:2021), 
+census_data <- make_tidy_pop_estimates(year = c(2017:2017), 
                                         municipio = FALSE,
-                                        group = FALSE, 
                                         un_data = FALSE,
-                                        table_type = NULL, 
                                         census_key = census_key)
 
 
@@ -132,13 +130,18 @@ census_data_sum <- census_data %>%
 comparison_2 <- merge(un_data_sum, census_data_sum, by = "year") %>%
   mutate(difference = estimate.x - estimate.y)
 
-
+census_key <- "5f45609e8b5af7804d7ba5f3262c056df558488a"
 ### projections ###
 
-un_data_projections <- make_tidy_pop_estimates(year = c(2024:2030), 
-                                   municipio = FALSE,
-                                   group = FALSE, 
-                                   un_data = TRUE,
-                                   table_type = NULL, 
+un_data_projections <- make_tidy_pop_estimates(year = c(2016,2022), 
+                                   municipio = T,
+                                   un_data = F,
                                    census_key = census_key)
+
+pop_by_age_gender <- make_tidy_pop_estimates(year = c(2022), 
+                           municipio = F,
+                           un_data = F,
+                           census_key = census_key)
+
+save(pop_by_age_gender, file = "~/Documents/PhD/bivalent_booster/rdas/pop_tabs.rda")
   
