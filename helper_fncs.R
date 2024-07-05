@@ -1,6 +1,10 @@
 # Helper functions #
 
-
+library(httr)
+library(jsonlite)
+library(tidyverse)
+library(data.table)
+library(stringr)
 #age ranges
 
 
@@ -191,7 +195,7 @@ wrangle_pep <- function(dat, municipio = NULL, year.input = year_input) {
 
 
 get_wrangle_estimates <- function(year_input, product, municipio, census_key) {
-year_input <- 2019
+
   if (product == "acs") {
     state_code <- 72
     api <- paste0("https://api.census.gov/data/", year_input,
@@ -267,3 +271,15 @@ get_census_estimates <- function(years, product, municipio, census_key = census_
   })
  return(temp)
 }
+
+
+pep <- get_census_estimates(2000:2019, product = "pep", municipio = FALSE, census_key = census_key)
+
+pep2 <- get_census_estimates(2020:2023, product = "pep", municipio = FALSE, census_key = census_key)
+pep2 <- pep2[, keyby = .(age, year, gender), .(estimate = sum(as.numeric(estimate)))]
+pep <- data.table(rbind(pep, pep2))
+save(pep, file = "../mortality/rdas/pep.rda")
+## test 
+
+
+
